@@ -65,7 +65,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 @property (assign, nonatomic, getter = isExecuting) BOOL executing;
 @property (assign, nonatomic, getter = isFinished) BOOL finished;
-@property (strong, nonatomic, nullable) NSMutableData *imageData;
+@property (strong, atomic, nullable) NSMutableData *imageData;
 @property (copy, nonatomic, nullable) NSData *cachedData;
 
 // This is weak because it is injected by whoever manages this session. If this gets nil-ed out, we won't be able to run
