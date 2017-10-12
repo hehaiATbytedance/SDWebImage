@@ -12,6 +12,42 @@
 #import <ImageIO/ImageIO.h>
 #import "SDWebImageManager.h"
 #import "NSImage+WebCache.h"
+#import "SDImageCoder.h"
+#import "UIImage+SDWebImage.h"
+
+static NSData *JPEGSOSMarker() {
+    // "Start Of Scan" Marker
+    static NSData *marker = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        uint8_t bytes[2] = {0xFF, 0xDA};
+        marker = [NSData dataWithBytes:bytes length:2];
+    });
+    return marker;
+}
+
+static CGColorSpaceRef SDKKCGColorSpaceGetDeviceRGB() {
+    static CGColorSpaceRef space;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        space = CGColorSpaceCreateDeviceRGB();
+    });
+    return space;
+}
+
+static BOOL SDCGImageLastPixelFilled(CGImageRef image) {
+    if (!image) return NO;
+    size_t width = CGImageGetWidth(image);
+    size_t height = CGImageGetHeight(image);
+    if (width == 0 || height == 0) return NO;
+    CGContextRef ctx = CGBitmapContextCreate(NULL, 1, 1, 8, 0, SDKKCGColorSpaceGetDeviceRGB(), kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrderDefault);
+    if (!ctx) return NO;
+    CGContextDrawImage(ctx, CGRectMake( -(int)width + 1, 0, width, height), image);
+    uint8_t *bytes = CGBitmapContextGetData(ctx);
+    BOOL isAlpha = bytes && bytes[0] == 0;
+    CFRelease(ctx);
+    return !isAlpha;
+}
 
 NSString *const SDWebImageDownloadStartNotification = @"SDWebImageDownloadStartNotification";
 NSString *const SDWebImageDownloadReceiveResponseNotification = @"SDWebImageDownloadReceiveResponseNotification";
@@ -45,6 +81,12 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 #if SD_UIKIT
 @property (assign, nonatomic) UIBackgroundTaskIdentifier backgroundTaskId;
 #endif
+
+@property (assign, nonatomic) NSTimeInterval lastProgressiveDecodeTimestamp;
+@property (assign, nonatomic) BOOL progressiveDetected;
+@property (assign, nonatomic) NSUInteger progressiveScanedLength;
+@property (assign, nonatomic) NSUInteger progressiveDisplayCount;
+@property (strong, nonatomic) SDImageCoder *progressiveCoder;
 
 @end
 
@@ -327,6 +369,81 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
     [self.imageData appendData:data];
+    
+    if ((self.options & SDWebImageFlipagramProgressive) && self.expectedSize > 0) {
+        //小于上次显示的decode时间返回
+        NSTimeInterval min = 0.4;
+        NSTimeInterval now = CACurrentMediaTime();
+        if (now - _lastProgressiveDecodeTimestamp < min) return;
+        
+        if (self.isCancelled) return;
+        
+        if (!_progressiveCoder) {
+            _progressiveCoder = [[SDImageCoder alloc] init];
+        }
+        //update source
+        [_progressiveCoder updateData:_imageData final:NO];
+        //不支持格式返回
+        if (_progressiveCoder.imageType == SDImageFormatUndefined || _progressiveCoder.imageType == SDImageFormatWebP) return;
+        if (_progressiveCoder.imageType != SDImageFormatJPEG && _progressiveCoder.imageType != SDImageFormatPNG) return;
+        
+        if (_progressiveCoder.framesCount == 0) return;
+        
+        if (_progressiveCoder.imageType == SDImageFormatJPEG) {
+            //判断图片是否支持progressive
+            if (!_progressiveDetected) {
+                NSDictionary *dic = [_progressiveCoder framePropertiesAtIndex:0];
+                NSDictionary *jpeg = dic[(id)kCGImagePropertyJFIFDictionary];
+                NSNumber *isProgressive = jpeg[(id)kCGImagePropertyJFIFIsProgressive];
+                if (!isProgressive.boolValue) {
+                    return;
+                }
+                _progressiveDetected = YES;
+            }
+            //判断扫描长度
+            NSInteger scanLength = (NSInteger)_imageData.length - (NSInteger)_progressiveScanedLength - 4;
+            if (scanLength <= 2) return;
+            
+            NSRange scanRange = NSMakeRange(_progressiveScanedLength, scanLength);
+            NSRange markedRange = [_imageData rangeOfData:JPEGSOSMarker() options:kNilOptions range:scanRange];
+            _progressiveScanedLength = _imageData.length;
+            if (markedRange.location == NSNotFound) return;
+            if (self.isCancelled) return;
+        } else if (_progressiveCoder.imageType == SDImageFormatPNG) {
+            //判断图片是否支持progressive
+            if (!_progressiveDetected) {
+                NSDictionary *dic = [_progressiveCoder framePropertiesAtIndex:0];
+                NSDictionary *jpeg = dic[(id)kCGImagePropertyPNGDictionary];
+                NSNumber *isProgressive = jpeg[(id)kCGImagePropertyPNGInterlaceType];
+                if (!isProgressive.boolValue) {
+                    return;
+                }
+                _progressiveDetected = YES;
+            }
+        }
+        UIImage *image = [_progressiveCoder imageAtIndex:0 decodeForDisplay:YES];
+        if (!image) return;
+        if (self.isCancelled) return;
+        //判断能否形成一个图像
+        if (!SDCGImageLastPixelFilled(image.CGImage)) return;
+        _progressiveDisplayCount++;
+        
+        CGFloat radius = 32;
+        if (_expectedSize > 0) {
+            radius *= 1.0 / (3 * _imageData.length / (CGFloat)_expectedSize + 0.6) - 0.25;
+        } else {
+            radius /= (_progressiveDisplayCount);
+        }
+        
+        image = [image sd_imageByBlurRadius:radius tintColor:nil tintMode:0 saturation:1 maskImage:nil];
+        if (image) {
+            if (!self.isCancelled) {
+                [self callCompletionBlocksWithImage:image imageData:nil error:nil finished:NO];
+                _lastProgressiveDecodeTimestamp = now;
+            }
+        }
+        return;
+    }
 
     if ((self.options & SDWebImageDownloaderProgressiveDownload) && self.expectedSize > 0) {
         // The following code is from http://www.cocoaintheshell.com/2011/05/progressive-images-download-imageio/
