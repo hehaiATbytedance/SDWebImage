@@ -163,7 +163,7 @@
             if (options & SDWebImageAllowInvalidSSLCertificates) downloaderOptions |= SDWebImageDownloaderAllowInvalidSSLCertificates;
             if (options & SDWebImageHighPriority) downloaderOptions |= SDWebImageDownloaderHighPriority;
             if (options & SDWebImageScaleDownLargeImages) downloaderOptions |= SDWebImageDownloaderScaleDownLargeImages;
-            if (options & SDWebImageFlipagramProgressive) downloaderOptions != SDWebImageFlipagramProgressive;
+            if (options & SDWebImageFlipagramProgressive) downloaderOptions |= SDWebImageFlipagramProgressive;
             
             if (cachedImage && options & SDWebImageRefreshCached) {
                 // force progressive off if image already cached but forced refreshing
