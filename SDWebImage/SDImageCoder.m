@@ -8,7 +8,7 @@
 
 #import "SDImageCoder.h"
 #import <pthread.h>
-
+#import <ImageIO/ImageIO.h>
 
 CGColorSpaceRef SDCGColorSpaceGetDeviceRGB() {
     static CGColorSpaceRef space;
