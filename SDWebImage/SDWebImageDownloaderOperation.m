@@ -370,7 +370,7 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
     [self.imageData appendData:data];
     
-    if ((self.options & SDWebImageFlipagramProgressive) && self.expectedSize > 0) {
+    if ((self.options & SDWebImageBlurProgressive) && self.expectedSize > 0) {
         //小于上次显示的decode时间返回
         NSTimeInterval min = 0.4;
         NSTimeInterval now = CACurrentMediaTime();

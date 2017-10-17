@@ -96,7 +96,7 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
      */
     SDWebImageScaleDownLargeImages = 1 << 12,
     
-    SDWebImageFlipagramProgressive = 1 << 13
+    SDWebImageBlurProgressive = 1 << 13
 };
 
 typedef void(^SDExternalCompletionBlock)(UIImage * _Nullable image, NSError * _Nullable error, SDImageCacheType cacheType, NSURL * _Nullable imageURL);
