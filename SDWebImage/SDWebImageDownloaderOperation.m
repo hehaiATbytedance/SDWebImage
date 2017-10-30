@@ -442,10 +442,7 @@ didReceiveResponse:(NSURLResponse *)response
                 _lastProgressiveDecodeTimestamp = now;
             }
         }
-        return;
-    }
-
-    if ((self.options & SDWebImageDownloaderProgressiveDownload) && self.expectedSize > 0) {
+    } else if ((self.options & SDWebImageDownloaderProgressiveDownload) && self.expectedSize > 0) {
         // The following code is from http://www.cocoaintheshell.com/2011/05/progressive-images-download-imageio/
         // Thanks to the author @Nyx0uf
         
