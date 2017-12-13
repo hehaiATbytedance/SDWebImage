@@ -88,7 +88,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         NSString *fullNamespace = [@"com.hackemist.SDWebImageCache." stringByAppendingString:ns];
         
         // Create IO serial queue
-        _ioQueue = dispatch_queue_create("com.hackemist.SDWebImageCache", DISPATCH_QUEUE_SERIAL);
+        _ioQueue = dispatch_queue_create("com.hackemist.SDWebImageCache", DISPATCH_QUEUE_CONCURRENT);
         
         _config = [[SDImageCacheConfig alloc] init];
         
@@ -104,7 +104,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
             _diskCachePath = path;
         }
 
-        dispatch_sync(_ioQueue, ^{
+        dispatch_barrier_sync(_ioQueue, ^{
             _fileManager = [NSFileManager new];
         });
 
@@ -216,7 +216,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     }
     
     if (toDisk) {
-        dispatch_async(self.ioQueue, ^{
+        dispatch_barrier_async(self.ioQueue, ^{
             @autoreleasepool {
                 NSData *data = imageData;
                 if (!data && image) {
@@ -429,7 +429,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     }
 
     if (fromDisk) {
-        dispatch_async(self.ioQueue, ^{
+        dispatch_barrier_async(self.ioQueue, ^{
             [_fileManager removeItemAtPath:[self defaultCachePathForKey:key] error:nil];
             
             if (completion) {
@@ -469,7 +469,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (void)clearDiskOnCompletion:(nullable SDWebImageNoParamsBlock)completion {
-    dispatch_async(self.ioQueue, ^{
+    dispatch_barrier_async(self.ioQueue, ^{
         [_fileManager removeItemAtPath:self.diskCachePath error:nil];
         [_fileManager createDirectoryAtPath:self.diskCachePath
                 withIntermediateDirectories:YES
@@ -489,7 +489,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (void)deleteOldFilesWithCompletionBlock:(nullable SDWebImageNoParamsBlock)completionBlock {
-    dispatch_async(self.ioQueue, ^{
+    dispatch_barrier_async(self.ioQueue, ^{
         NSURL *diskCacheURL = [NSURL fileURLWithPath:self.diskCachePath isDirectory:YES];
         NSArray<NSString *> *resourceKeys = @[NSURLIsDirectoryKey, NSURLContentModificationDateKey, NSURLTotalFileAllocatedSizeKey];
 
